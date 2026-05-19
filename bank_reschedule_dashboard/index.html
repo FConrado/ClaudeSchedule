@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bank Schedules - Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', monospace;
+            background: #262626;
+            min-height: 100vh;
+            padding: 0;
+            color: #d1d5db;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0;
+            background: #1e1e1e;
+            border-radius: 0;
+            box-shadow: none;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: #262626;
+            color: #f5f5f5;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #404040;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .item-count {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-left: 16px;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: #ff6b00;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #ff8c00;
+        }
+
+        .btn-secondary {
+            background: #ff6b00;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #ff8c00;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+            padding: 6px 10px;
+            font-size: 11px;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .content {
+            padding: 20px 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #9ca3af;
+        }
+
+        .spinner {
+            border: 3px solid #404040;
+            border-top: 3px solid #ff6b00;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            padding: 16px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            border-left: 3px solid #ef4444;
+            font-size: 13px;
+        }
+
+        .success {
+            background: rgba(34, 197, 94, 0.15);
+            color: #86efac;
+            padding: 16px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            border-left: 3px solid #22c55e;
+            font-size: 13px;
+        }
+
+        .info {
+            background: rgba(59, 130, 246, 0.15);
+            color: #93c5fd;
+            padding: 16px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            border-left: 3px solid #3b82f6;
+            font-size: 13px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #2d2d2d;
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid #404040;
+        }
+
+        thead {
+            background: #323232;
+            border-bottom: 1px solid #404040;
+        }
+
+        th {
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: #e5e5e5;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #3f3f3f;
+            color: #d1d5db;
+            font-size: 13px;
+        }
+
+        tr:hover {
+            background: #363636;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr.duplicate {
+            border-left: 3px solid #ef4444;
+        }
+
+        tr.duplicate td:nth-child(2) {
+            border: 2px solid #ef4444;
+            border-radius: 4px;
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .id-cell {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            word-break: break-all;
+            color: #a5a5a5;
+        }
+
+        .action-cell {
+            text-align: center;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6b7280;
+        }
+
+        .footer {
+            background: #262626;
+            padding: 16px 24px;
+            border-top: 1px solid #404040;
+            font-size: 11px;
+            color: #6b7280;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 12px;
+                text-align: center;
+            }
+
+            .header-controls {
+                width: 100%;
+                justify-content: center;
+            }
+
+            table {
+                font-size: 12px;
+            }
+
+            th, td {
+                padding: 8px;
+            }
+
+            .id-cell {
+                font-size: 10px;
+            }
+        }
+    </style>
+    <script src="config.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>📅 Bank Schedules <span class="item-count" id="itemCount"></span></h1>
+            </div>
+            <div class="header-controls">
+                <button class="btn-primary" onclick="fetchSchedules()">Refresh</button>
+            </div>
+        </div>
+
+        <div class="content">
+            <div id="message"></div>
+            <div id="tableContainer"></div>
+        </div>
+
+        <div class="footer">
+            <p>API: https://nexiplay-84024.bubbleapps.io/version-03b0x/api/1.1/wf/getschedules</p>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://nexiplay-84024.bubbleapps.io/version-03b0x/api/1.1/wf/getschedules';
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchSchedules();
+        });
+
+        function fetchSchedules() {
+            return new Promise((resolve, reject) => {
+                const container = document.getElementById('tableContainer');
+                container.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading schedules...</p></div>';
+
+                callBubbleApi('/version-03b0x/api/1.1/wf/getschedules')
+                    .then(data => {
+                    console.log('Raw API response:', data);
+
+                    // Parse the new format from response object
+                    const amounts = (data.response?.Amounts || '').split('¬').map(v => v.trim()).filter(v => v);
+                    const dates = (data.response?.Dates || '').split('¬').map(v => v.trim()).filter(v => v);
+                    const scheduleIds = (data.response?.ScheduleIDs || '').split('¬').map(v => v.trim()).filter(v => v);
+                    const uniqueIds = (data.response?.UniqueIDs || '').split('¬').map(v => v.trim()).filter(v => v);
+
+                    console.log('Amounts:', amounts);
+                    console.log('Dates:', dates);
+                    console.log('ScheduleIDs:', scheduleIds);
+                    console.log('UniqueIDs:', uniqueIds);
+
+                    // Reconstruct items: each position in the arrays represents one item
+                    const schedules = [];
+                    const itemCount = Math.min(amounts.length, dates.length, scheduleIds.length, uniqueIds.length);
+
+                    for (let i = 0; i < itemCount; i++) {
+                        schedules.push({
+                            ScheduleID: scheduleIds[i],
+                            Scheduler: dates[i],
+                            Amount_transfer: parseFloat(amounts[i]) || 0,
+                            _id: uniqueIds[i]
+                        });
+                    }
+
+                    console.log('Reconstructed schedules:', schedules);
+
+                    schedules.sort((a, b) => {
+                        const timeA = new Date(a.Scheduler || a.Schedule).getTime();
+                        const timeB = new Date(b.Scheduler || b.Schedule).getTime();
+                        return timeA - timeB;
+                    });
+                        renderTable(schedules);
+                        resolve();
+                    })
+                    .catch(error => {
+                        showMessage(`Error loading schedules: ${error.message}`, 'error');
+                        container.innerHTML = '<div class="empty-state"><p>Failed to load data</p></div>';
+                        reject(error);
+                    });
+            });
+        }
+
+        function renderTable(schedules) {
+            document.getElementById('itemCount').textContent = `(${schedules.length} items)`;
+
+            if (!schedules || schedules.length === 0) {
+                document.getElementById('tableContainer').innerHTML =
+                    '<div class="empty-state"><p>No schedules found</p></div>';
+                return;
+            }
+
+            // Find duplicate scheduler times
+            const schedulerCounts = {};
+            schedules.forEach(s => {
+                const time = formatTime(s.Scheduler || s.Schedule);
+                schedulerCounts[time] = (schedulerCounts[time] || 0) + 1;
+            });
+
+            const html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Scheduler</th>
+                            <th>Amount Transfer</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${schedules.map(s => {
+                            const time = formatTime(s.Scheduler || s.Schedule);
+                            const isDuplicate = schedulerCounts[time] > 1;
+                            return `
+                                <tr ${isDuplicate ? 'class="duplicate"' : ''}>
+                                    <td class="id-cell">${s.ScheduleID || s._id || '-'}</td>
+                                    <td>${time}</td>
+                                    <td>${formatCurrency(s.Amount_transfer)}</td>
+                                    <td class="action-cell">
+                                        <button class="btn-danger" onclick="reschedule('${s._id || s.ScheduleID || ''}')">
+                                            Reagendar
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            document.getElementById('tableContainer').innerHTML = html;
+        }
+
+        function reschedule(uniqueID) {
+            try {
+                // Get all existing times from the current schedules
+                const existingTimes = new Set();
+                document.querySelectorAll('table tbody tr').forEach(row => {
+                    const timeCell = row.cells[1]?.textContent.trim();
+                    if (timeCell) existingTimes.add(timeCell);
+                });
+
+                console.log('Existing times:', Array.from(existingTimes));
+
+                // Find first available 15-second interval after 2pm on May 20, 2026 (local time)
+                const baseDate = new Date(2026, 4, 20, 14, 0, 0);
+                let currentTime = new Date(baseDate);
+                let foundSlot = null;
+
+                // Check up to 24 hours worth of 15-second intervals
+                for (let i = 0; i < 24 * 60 * 4; i++) {
+                    const timeString = currentTime.toLocaleTimeString('pt-BR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                    });
+
+                    if (!existingTimes.has(timeString)) {
+                        foundSlot = new Date(currentTime);
+                        break;
+                    }
+
+                    currentTime.setSeconds(currentTime.getSeconds() + 15);
+                }
+
+                if (!foundSlot) {
+                    showMessage('No available time slots found!', 'error');
+                    return;
+                }
+
+                // Convert local time to UTC for API (add timezone offset)
+                const offset = new Date().getTimezoneOffset() / 60;
+                console.log('Timezone offset:', offset);
+                console.log('foundSlot before:', foundSlot.getHours(), foundSlot.getMinutes(), foundSlot.getSeconds());
+
+                const utcDate = new Date(foundSlot);
+                utcDate.setHours(utcDate.getHours() + offset);
+                console.log('utcDate after adding offset:', utcDate.getHours(), utcDate.getMinutes(), utcDate.getSeconds());
+
+                // Format date as YYYY-MM-DDTHH:MM:ss
+                const year = utcDate.getFullYear();
+                const month = String(utcDate.getMonth() + 1).padStart(2, '0');
+                const day = String(utcDate.getDate()).padStart(2, '0');
+                const hours = String(utcDate.getHours()).padStart(2, '0');
+                const minutes = String(utcDate.getMinutes()).padStart(2, '0');
+                const seconds = String(utcDate.getSeconds()).padStart(2, '0');
+                const newDate = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+                console.log('Final newDate being sent:', newDate);
+
+                // Make POST request to reschedule API (form-urlencoded)
+                const url = `${BUBBLE_CONFIG.baseUrl}/version-03b0x/api/1.1/wf/reschedulenexitransaction`;
+                const formData = new URLSearchParams();
+                formData.append('Transaction', uniqueID);
+                formData.append('NewDate', newDate);
+
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${BUBBLE_CONFIG.bearerToken}`,
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Reschedule response:', data);
+                    showMessage('Updating schedule list...', 'info');
+                    // Wait 2 seconds for server to update, then refresh
+                    setTimeout(() => {
+                        fetchSchedules().then(() => {
+                            showMessage(`Transaction rescheduled to ${foundSlot.toLocaleString('pt-BR')}`, 'success');
+                        });
+                    }, 2000);
+                })
+                .catch(error => {
+                    console.error('Reschedule error:', error);
+                    showMessage(`Error rescheduling: ${error.message}`, 'error');
+                });
+
+            } catch (error) {
+                console.error('Error in reschedule:', error);
+                showMessage(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        function showMessage(message, type = 'info') {
+            const container = document.getElementById('message');
+            const className = type;
+            container.innerHTML = `<div class="${className}">${message}</div>`;
+
+            if (type !== 'error') {
+                setTimeout(() => container.innerHTML = '', 5000);
+            }
+        }
+
+        function formatCurrency(value) {
+            if (!value && value !== 0) return '-';
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(value);
+        }
+
+        function formatTime(timeString) {
+            if (!timeString) return '-';
+            try {
+                // API returns time in HH:MM:ss format
+                // Just format it as is
+                const [hours, minutes, seconds] = timeString.split(':').map(Number);
+                return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            } catch {
+                return timeString;
+            }
+        }
+    </script>
+</body>
+</html>
