@@ -53,6 +53,16 @@
             margin-left: 16px;
         }
 
+        .duplicate-count {
+            font-size: 12px;
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid #ef4444;
+            border-radius: 4px;
+            padding: 2px 8px;
+            margin-left: 8px;
+        }
+
         .header-controls {
             display: flex;
             gap: 12px;
@@ -260,7 +270,7 @@
     <div class="container">
         <div class="header">
             <div>
-                <h1>📅 Bank Schedules <span class="item-count" id="itemCount"></span></h1>
+                <h1>📅 Bank Schedules <span class="item-count" id="itemCount"></span> <span id="duplicateCount"></span> <span class="item-count" id="totalAmount"></span></h1>
             </div>
             <div class="header-controls">
                 <button class="btn-primary" onclick="fetchSchedules()">Refresh</button>
@@ -273,12 +283,15 @@
         </div>
 
         <div class="footer">
-            <p>API: https://nexiplay-84024.bubbleapps.io/version-03b0x/api/1.1/wf/getschedules</p>
+            <p>API: https://nexiplay-84024.bubbleapps.io/version-live/api/1.1/wf/getschedules</p>
         </div>
     </div>
 
     <script>
-        const API_URL = 'https://nexiplay-84024.bubbleapps.io/version-03b0x/api/1.1/wf/getschedules';
+        const API_URL = 'https://nexiplay-84024.bubbleapps.io/version-live/api/1.1/wf/getschedules';
+
+        // Tracks UTC slots assigned this session so rapid clicks don't collide
+        const usedSlots = new Set();
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', () => {
@@ -290,20 +303,13 @@
                 const container = document.getElementById('tableContainer');
                 container.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading schedules...</p></div>';
 
-                callBubbleApi('/version-03b0x/api/1.1/wf/getschedules')
+                callBubbleApi('/version-live/api/1.1/wf/getschedules')
                     .then(data => {
-                    console.log('Raw API response:', data);
-
                     // Parse the new format from response object
                     const amounts = (data.response?.Amounts || '').split('¬').map(v => v.trim()).filter(v => v);
                     const dates = (data.response?.Dates || '').split('¬').map(v => v.trim()).filter(v => v);
                     const scheduleIds = (data.response?.ScheduleIDs || '').split('¬').map(v => v.trim()).filter(v => v);
                     const uniqueIds = (data.response?.UniqueIDs || '').split('¬').map(v => v.trim()).filter(v => v);
-
-                    console.log('Amounts:', amounts);
-                    console.log('Dates:', dates);
-                    console.log('ScheduleIDs:', scheduleIds);
-                    console.log('UniqueIDs:', uniqueIds);
 
                     // Reconstruct items: each position in the arrays represents one item
                     const schedules = [];
@@ -313,17 +319,17 @@
                         schedules.push({
                             ScheduleID: scheduleIds[i],
                             Scheduler: dates[i],
-                            Amount_transfer: parseFloat(amounts[i]) || 0,
+                            Amount_transfer: parseFloat(amounts[i].replace(',', '.')) || 0,
                             _id: uniqueIds[i]
                         });
                     }
 
-                    console.log('Reconstructed schedules:', schedules);
-
                     schedules.sort((a, b) => {
-                        const timeA = new Date(a.Scheduler || a.Schedule).getTime();
-                        const timeB = new Date(b.Scheduler || b.Schedule).getTime();
-                        return timeA - timeB;
+                        const toSeconds = t => {
+                            const [h, m, s] = (t || '').split(':').map(Number);
+                            return (h || 0) * 3600 + (m || 0) * 60 + (s || 0);
+                        };
+                        return toSeconds(a.Scheduler || a.Schedule) - toSeconds(b.Scheduler || b.Schedule);
                     });
                         renderTable(schedules);
                         resolve();
@@ -342,6 +348,7 @@
             if (!schedules || schedules.length === 0) {
                 document.getElementById('tableContainer').innerHTML =
                     '<div class="empty-state"><p>No schedules found</p></div>';
+                document.getElementById('duplicateCount').innerHTML = '';
                 return;
             }
 
@@ -352,6 +359,17 @@
                 schedulerCounts[time] = (schedulerCounts[time] || 0) + 1;
             });
 
+            const total = schedules.reduce((sum, s) => sum + s.Amount_transfer, 0);
+            document.getElementById('totalAmount').textContent = `· Total: ${formatCurrency(total)}`;
+
+            const duplicateItems = schedules.filter(s => schedulerCounts[formatTime(s.Scheduler || s.Schedule)] > 1).length;
+            const dupEl = document.getElementById('duplicateCount');
+            if (duplicateItems > 0) {
+                dupEl.innerHTML = `<span class="duplicate-count">⚠ ${duplicateItems} duplicates</span>`;
+            } else {
+                dupEl.innerHTML = '<span class="duplicate-count" style="background:rgba(34,197,94,0.15);color:#86efac;border-color:#22c55e">✓ No duplicates</span>';
+            }
+
             const html = `
                 <table>
                     <thead>
@@ -359,7 +377,7 @@
                             <th>ID</th>
                             <th>Scheduler</th>
                             <th>Amount Transfer</th>
-                            <th>Ação</th>
+                            <th style="text-align:center">Ação</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -368,7 +386,7 @@
                             const isDuplicate = schedulerCounts[time] > 1;
                             return `
                                 <tr ${isDuplicate ? 'class="duplicate"' : ''}>
-                                    <td class="id-cell">${s.ScheduleID || s._id || '-'}</td>
+                                    <td class="id-cell">${s.ScheduleID || '-'}<br><span style="color:#6b7280">${s._id || '-'}</span></td>
                                     <td>${time}</td>
                                     <td>${formatCurrency(s.Amount_transfer)}</td>
                                     <td class="action-cell">
@@ -388,30 +406,28 @@
 
         function reschedule(uniqueID) {
             try {
-                // Get all existing times from the current schedules
-                const existingTimes = new Set();
+                // Merge API times from DOM with locally-tracked assigned slots
+                const existingTimes = new Set(usedSlots);
                 document.querySelectorAll('table tbody tr').forEach(row => {
                     const timeCell = row.cells[1]?.textContent.trim();
                     if (timeCell) existingTimes.add(timeCell);
                 });
 
-                console.log('Existing times:', Array.from(existingTimes));
-
-                // Find first available 15-second interval after 2pm on May 20, 2026 (local time)
+                // Find first available 15-second UTC slot starting from 2pm local
                 const baseDate = new Date(2026, 4, 20, 14, 0, 0);
                 let currentTime = new Date(baseDate);
                 let foundSlot = null;
 
-                // Check up to 24 hours worth of 15-second intervals
                 for (let i = 0; i < 24 * 60 * 4; i++) {
-                    const timeString = currentTime.toLocaleTimeString('pt-BR', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit'
-                    });
+                    const utcHour = currentTime.getUTCHours();
+                    const hour12 = utcHour > 12 ? utcHour - 12 : utcHour;
+                    const timeString = `${String(hour12).padStart(2, '0')}:${String(currentTime.getUTCMinutes()).padStart(2, '0')}:${String(currentTime.getUTCSeconds()).padStart(2, '0')}`;
+
+                    console.log(`candidate: "${timeString}" | in existingTimes: ${existingTimes.has(timeString)}`);
 
                     if (!existingTimes.has(timeString)) {
                         foundSlot = new Date(currentTime);
+                        usedSlots.add(timeString);
                         break;
                     }
 
@@ -423,27 +439,10 @@
                     return;
                 }
 
-                // Convert local time to UTC for API (add timezone offset)
-                const offset = new Date().getTimezoneOffset() / 60;
-                console.log('Timezone offset:', offset);
-                console.log('foundSlot before:', foundSlot.getHours(), foundSlot.getMinutes(), foundSlot.getSeconds());
-
-                const utcDate = new Date(foundSlot);
-                utcDate.setHours(utcDate.getHours() + offset);
-                console.log('utcDate after adding offset:', utcDate.getHours(), utcDate.getMinutes(), utcDate.getSeconds());
-
-                // Format date as YYYY-MM-DDTHH:MM:ss
-                const year = utcDate.getFullYear();
-                const month = String(utcDate.getMonth() + 1).padStart(2, '0');
-                const day = String(utcDate.getDate()).padStart(2, '0');
-                const hours = String(utcDate.getHours()).padStart(2, '0');
-                const minutes = String(utcDate.getMinutes()).padStart(2, '0');
-                const seconds = String(utcDate.getSeconds()).padStart(2, '0');
-                const newDate = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
-                console.log('Final newDate being sent:', newDate);
+                const newDate = foundSlot.toISOString().slice(0, 19);
 
                 // Make POST request to reschedule API (form-urlencoded)
-                const url = `${BUBBLE_CONFIG.baseUrl}/version-03b0x/api/1.1/wf/reschedulenexitransaction`;
+                const url = `${BUBBLE_CONFIG.baseUrl}/version-live/api/1.1/wf/reschedulenexitransaction`;
                 const formData = new URLSearchParams();
                 formData.append('Transaction', uniqueID);
                 formData.append('NewDate', newDate);
@@ -463,7 +462,6 @@
                     return response.json();
                 })
                 .then(data => {
-                    console.log('Reschedule response:', data);
                     showMessage('Updating schedule list...', 'info');
                     // Wait 2 seconds for server to update, then refresh
                     setTimeout(() => {
